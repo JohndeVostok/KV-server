@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sync"
 )
 
 const (
@@ -22,36 +23,53 @@ type RequestArgs struct {
 
 type ResponseArgs struct {
 	Status int
+	Value  string
 }
 
 type KVServer struct {
-	mu   sync.mutex
+	mu   sync.Mutex
 	data map[string]string
 }
 
-func (kv *KVServer) Put(args RequestArgs) {
+var kv *KVServer
 
+func (kv *KVServer) Put(args RequestArgs) *ResponseArgs {
+	kv.mu.Lock()
+	kv.data[args.Key] = args.Value
+	kv.mu.Unlock()
+	var resp *ResponseArgs = &ResponseArgs{1, args.Value}
+	return resp
 }
 
-func (kv *KVServer) Get(args RequestArgs) {
-
+func (kv *KVServer) Get(args RequestArgs) *ResponseArgs {
+	kv.mu.Lock()
+	v, ok := kv.data[args.Key]
+	kv.mu.Unlock()
+	var resp *ResponseArgs
+	if ok {
+		resp = &ResponseArgs{1, v}
+	} else {
+		resp = &ResponseArgs{0, ""}
+	}
+	return resp
 }
 
 func handleReq(w http.ResponseWriter, req *http.Request) {
 	body, _ := ioutil.ReadAll(req.Body)
-	var args Args
+	var args RequestArgs
 	err := json.Unmarshal(body, &args)
 	if err != nil {
-		fmt.Println("Unmarshal: ", err)
+		log.Println("Unmarshal: ", err)
 	} else {
-		if args.Op == OPPUT {
-			kv.Put(args)
+		var resp *ResponseArgs
+		switch args.Op {
+		case OPPUT:
+			resp = kv.Put(args)
+		case OPGET:
+			resp = kv.Get(args)
 		}
-		if args.Op == OPGET {
-			kv.Get(args)
-		}
-		ret, _ := json.Marshal(args)
-		fmt.Fprint(w, string(ret))
+		content, _ := json.Marshal(resp)
+		fmt.Fprint(w, string(content))
 	}
 }
 
@@ -62,6 +80,7 @@ func StartServer() *KVServer {
 }
 
 func main() {
+	kv = StartServer()
 	http.HandleFunc("/", handleReq)
 	err := http.ListenAndServe(":12345", nil)
 	if err != nil {
