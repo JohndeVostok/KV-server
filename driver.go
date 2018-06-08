@@ -33,15 +33,16 @@ type KVServer struct {
 
 var kv *KVServer
 
-func (kv *KVServer) Put(args RequestArgs) *ResponseArgs {
+func (kv *KVServer) Put(args *RequestArgs) *ResponseArgs {
 	kv.mu.Lock()
 	kv.data[args.Key] = args.Value
 	kv.mu.Unlock()
-	var resp *ResponseArgs = &ResponseArgs{1, args.Value}
+	var resp *ResponseArgs = &ResponseArgs{1, ""}
+	log.Println("Put: ", args.Key, args.Value)
 	return resp
 }
 
-func (kv *KVServer) Get(args RequestArgs) *ResponseArgs {
+func (kv *KVServer) Get(args *RequestArgs) *ResponseArgs {
 	kv.mu.Lock()
 	v, ok := kv.data[args.Key]
 	kv.mu.Unlock()
@@ -51,26 +52,28 @@ func (kv *KVServer) Get(args RequestArgs) *ResponseArgs {
 	} else {
 		resp = &ResponseArgs{0, ""}
 	}
+	log.Println("Get: ", args.Key)
 	return resp
 }
 
 func handleReq(w http.ResponseWriter, req *http.Request) {
 	body, _ := ioutil.ReadAll(req.Body)
-	var args RequestArgs
+	var args *RequestArgs
+	var resp *ResponseArgs
 	err := json.Unmarshal(body, &args)
 	if err != nil {
 		log.Println("Unmarshal: ", err)
+		resp = &ResponseArgs{0, ""}
 	} else {
-		var resp *ResponseArgs
 		switch args.Op {
 		case OPPUT:
 			resp = kv.Put(args)
 		case OPGET:
 			resp = kv.Get(args)
 		}
-		content, _ := json.Marshal(resp)
-		fmt.Fprint(w, string(content))
 	}
+	content, _ := json.Marshal(resp)
+	fmt.Fprint(w, string(content))
 }
 
 func StartServer() *KVServer {
