@@ -15,5 +15,9 @@ while True:
     if (req[0] == "get"):
         args["Op"] = 2
         args["Key"] = req[1]
+    if (req[0] == "add"):
+        args["Op"] = 3
+        args["Key"] = req[1]
+        args["Value"] = req[2]
     r = requests.post(url, data = json.dumps(args))
     print(r.text)
